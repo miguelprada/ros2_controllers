@@ -18,6 +18,7 @@
 #include <functional>
 #include <memory>
 
+#include <std_msgs/msg/detail/u_int8__struct.hpp>
 #include <string>
 #include <vector>
 
@@ -42,6 +43,9 @@ namespace joint_trajectory_controller
 JointTrajectoryController::JointTrajectoryController()
 : controller_interface::ControllerInterface(), dof_(0)
 {
+  std_msgs::msg::UInt8 hundred;
+  hundred.data = 100U;
+  velocity_override_ptr_.writeFromNonRT(hundred);
 }
 
 controller_interface::CallbackReturn JointTrajectoryController::on_init()
@@ -117,6 +121,9 @@ JointTrajectoryController::state_interface_configuration() const
 controller_interface::return_type JointTrajectoryController::update(
   const rclcpp::Time & time, const rclcpp::Duration & period)
 {
+  velocity_override_ = velocity_override_ptr_.readFromRT()->data/100.0;
+  rclcpp::Duration period_ = period*velocity_override_;
+  uptime_+=period_;
   if (get_state().id() == lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE)
   {
     return controller_interface::return_type::OK;
@@ -206,19 +213,19 @@ controller_interface::return_type JointTrajectoryController::update(
       if (params_.open_loop_control)
       {
         traj_external_point_ptr_->set_point_before_trajectory_msg(
-          time, last_commanded_state_, joints_angle_wraparound_);
+          uptime_, last_commanded_state_, joints_angle_wraparound_);
       }
       else
       {
         traj_external_point_ptr_->set_point_before_trajectory_msg(
-          time, state_current_, joints_angle_wraparound_);
+          uptime_, state_current_, joints_angle_wraparound_);
       }
     }
 
     // find segment for current timestamp
     TrajectoryPointConstIter start_segment_itr, end_segment_itr;
     const bool valid_point = traj_external_point_ptr_->sample(
-      time, interpolation_method_, state_desired_, start_segment_itr, end_segment_itr);
+      uptime_, interpolation_method_, state_desired_, start_segment_itr, end_segment_itr);
 
     if (valid_point)
     {
@@ -230,7 +237,7 @@ controller_interface::return_type JointTrajectoryController::update(
       // time_difference is
       // - negative until first point is reached
       // - counting from zero to time_from_start of next point
-      double time_difference = time.seconds() - segment_time_from_start.seconds();
+      double time_difference = uptime_.seconds() - segment_time_from_start.seconds();
       bool tolerance_violated_while_moving = false;
       bool outside_goal_tolerance = false;
       bool within_goal_time = true;
@@ -295,10 +302,10 @@ controller_interface::return_type JointTrajectoryController::update(
           // Update PIDs
           for (auto i = 0ul; i < dof_; ++i)
           {
-            tmp_command_[i] = (state_desired_.velocities[i] * ff_velocity_scale_[i]) +
+            tmp_command_[i] = velocity_override_*(state_desired_.velocities[i] * ff_velocity_scale_[i]) +
                               pids_[i]->computeCommand(
                                 state_error_.positions[i], state_error_.velocities[i],
-                                (uint64_t)period.nanoseconds());
+                                (uint64_t)period_.nanoseconds());
           }
         }
 
@@ -335,7 +342,7 @@ controller_interface::return_type JointTrajectoryController::update(
       {
         // send feedback
         auto feedback = std::make_shared<FollowJTrajAction::Feedback>();
-        feedback->header.stamp = time;
+        feedback->header.stamp = uptime_;
         feedback->joint_names = params_.joints;
 
         feedback->actual = state_current_;
@@ -832,6 +839,10 @@ controller_interface::CallbackReturn JointTrajectoryController::on_configure(
     get_node()->create_subscription<trajectory_msgs::msg::JointTrajectory>(
       "~/joint_trajectory", rclcpp::SystemDefaultsQoS(),
       std::bind(&JointTrajectoryController::topic_callback, this, std::placeholders::_1));
+  velocity_override_subscriber_ =
+    get_node()->create_subscription<std_msgs::msg::UInt8>(
+      "~/velocity_override", rclcpp::SystemDefaultsQoS(),
+      std::bind(&JointTrajectoryController::velocity_override_callback, this, std::placeholders::_1));
 
   // State publisher
   RCLCPP_INFO(logger, "Controller state will be published at %.2f Hz.", params_.state_publish_rate);
@@ -1110,6 +1121,7 @@ bool JointTrajectoryController::reset()
 {
   subscriber_is_active_ = false;
   joint_command_subscriber_.reset();
+  velocity_override_subscriber_.reset();
 
   for (const auto & pid : pids_)
   {
@@ -1218,6 +1230,17 @@ void JointTrajectoryController::topic_callback(
   {
     add_new_trajectory_msg(msg);
     rt_is_holding_ = false;
+  }
+};
+
+void JointTrajectoryController::velocity_override_callback(
+  const std::shared_ptr<std_msgs::msg::UInt8> msg)
+{
+  if (subscriber_is_active_)
+  {
+    std_msgs::msg::UInt8 msg_{};
+    msg_.data = std::max(std::min(msg->data, uint8_t(100)),uint8_t(0));
+    velocity_override_ptr_.writeFromNonRT(msg_);
   }
 };
 

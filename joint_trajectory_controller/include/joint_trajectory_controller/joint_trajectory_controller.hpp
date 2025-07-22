@@ -19,6 +19,7 @@
 #include <chrono>
 #include <functional>  // for std::reference_wrapper
 #include <memory>
+#include <std_msgs/msg/detail/u_int8__struct.hpp>
 #include <string>
 #include <vector>
 
@@ -42,6 +43,7 @@
 #include "realtime_tools/realtime_buffer.hpp"
 #include "realtime_tools/realtime_publisher.hpp"
 #include "realtime_tools/realtime_server_goal_handle.hpp"
+#include "std_msgs/msg/u_int8.hpp"
 #include "trajectory_msgs/msg/joint_trajectory.hpp"
 #include "trajectory_msgs/msg/joint_trajectory_point.hpp"
 
@@ -166,12 +168,18 @@ protected:
   std::atomic<bool> subscriber_is_active_{false};
   rclcpp::Subscription<trajectory_msgs::msg::JointTrajectory>::SharedPtr joint_command_subscriber_ =
     nullptr;
+  rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr velocity_override_subscriber_ =
+    nullptr;
 
   rclcpp::Service<control_msgs::srv::QueryTrajectoryState>::SharedPtr query_state_srv_;
 
   std::shared_ptr<Trajectory> traj_external_point_ptr_ = nullptr;
   realtime_tools::RealtimeBuffer<std::shared_ptr<trajectory_msgs::msg::JointTrajectory>>
     traj_msg_external_point_ptr_;
+  realtime_tools::RealtimeBuffer<std_msgs::msg::UInt8>
+    velocity_override_ptr_;
+  double velocity_override_{1.0};
+  rclcpp::Time uptime_{0};
 
   std::shared_ptr<trajectory_msgs::msg::JointTrajectory> hold_position_msg_ptr_ = nullptr;
 
@@ -200,6 +208,9 @@ protected:
   // callback for topic interface
   JOINT_TRAJECTORY_CONTROLLER_PUBLIC
   void topic_callback(const std::shared_ptr<trajectory_msgs::msg::JointTrajectory> msg);
+
+  JOINT_TRAJECTORY_CONTROLLER_PUBLIC
+  void velocity_override_callback(const std::shared_ptr<std_msgs::msg::UInt8> msg);
 
   // callbacks for action_server_
   JOINT_TRAJECTORY_CONTROLLER_PUBLIC
