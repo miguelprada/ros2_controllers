@@ -3,7 +3,7 @@ joint_trajectory_controller:
     type: double,
     default_value: 0,
     description: "Smoothing factor",
-    read_only: true,
+    read_only: false,
   }
   joints: {
     type: string_array,
