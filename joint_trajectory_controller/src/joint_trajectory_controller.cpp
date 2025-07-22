@@ -121,7 +121,7 @@ JointTrajectoryController::state_interface_configuration() const
 controller_interface::return_type JointTrajectoryController::update(
   const rclcpp::Time & time, const rclcpp::Duration & period)
 {
-  velocity_override_ = velocity_override_ptr_.readFromRT()->data/100.0;
+  velocity_override_ = velocity_override_*params_.override_smoothing + (1-params_.override_smoothing)*velocity_override_ptr_.readFromRT()->data/100.0;
   rclcpp::Duration period_ = period*velocity_override_;
   uptime_+=period_;
   if (get_state().id() == lifecycle_msgs::msg::State::PRIMARY_STATE_INACTIVE)

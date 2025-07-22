@@ -1,4 +1,14 @@
 joint_trajectory_controller:
+  override_smoothing: {
+    type: double,
+    default_value: 0,
+    description: "Smoothing factor",
+    read_only: true,
+    validation: {
+      gt_eq: [0.0],
+      lt: [1.0],
+    }
+  }
   joints: {
     type: string_array,
     default_value: [],
