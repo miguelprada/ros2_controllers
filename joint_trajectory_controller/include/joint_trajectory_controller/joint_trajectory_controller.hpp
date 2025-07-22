@@ -180,6 +180,7 @@ protected:
     velocity_override_ptr_;
   double velocity_override_{1.0};
   rclcpp::Time uptime_{0};
+  std::vector<double> overriden_velocities_{};
 
   std::shared_ptr<trajectory_msgs::msg::JointTrajectory> hold_position_msg_ptr_ = nullptr;
 

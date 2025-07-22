@@ -322,7 +322,12 @@ controller_interface::return_type JointTrajectoryController::update(
           }
           else
           {
-            assign_interface_from_point(joint_command_interface_[1], state_desired_.velocities);
+            overriden_velocities_ = state_desired_.velocities;
+            for (auto& v : overriden_velocities_)
+            {
+              v*=velocity_override_;
+            }
+            assign_interface_from_point(joint_command_interface_[1], overriden_velocities_);
           }
         }
         if (has_acceleration_command_interface_)
